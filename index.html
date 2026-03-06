@@ -542,7 +542,6 @@ function resetGame(){
 // ============================================================
 function updatePlayer(){
   var p=player;if(!p||p.state==='dead')return;
-  var dtN=dt*60; // normalize physics to 60fps
   if(p.invulnTimer>0)p.invulnTimer-=dt;
   if(p.hitStun>0){p.hitStun-=dt;return;}
   if(p.stateTimer>0){p.stateTimer-=dt;if(p.stateTimer<=0)p.state='idle';}
@@ -551,10 +550,10 @@ function updatePlayer(){
   var moveDir=0;
   if(canMove){if(keys['ArrowLeft']||keys['KeyA'])moveDir=-1;if(keys['ArrowRight']||keys['KeyD'])moveDir=1;}
   p.onIce=isOnIce(p.x+p.w/2)&&p.onGround;
-  var fric=p.onIce?0.96:0.88,accel=p.onIce?0.3:0.7;
-  if(moveDir!==0&&canMove){p.vx+=moveDir*accel*p.char.speed*0.18*dtN;p.facing=moveDir;if(p.state!=='jump')p.state='walk';}
+  var fric=p.onIce?0.95:0.82,accel=p.onIce?0.4:1.0;
+  if(moveDir!==0&&canMove){p.vx+=moveDir*accel*p.char.speed*0.25;p.facing=moveDir;if(p.state!=='jump')p.state='walk';}
   else if(p.state==='walk'&&p.onGround)p.state='idle';
-  p.vx*=Math.pow(fric,dtN);var maxVel=p.char.speed*1.8;if(p.vx>maxVel)p.vx=maxVel;if(p.vx<-maxVel)p.vx=-maxVel;if(Math.abs(p.vx)<0.05)p.vx=0;
+  p.vx*=fric;var maxVel=p.char.speed*1.8;if(p.vx>maxVel)p.vx=maxVel;if(p.vx<-maxVel)p.vx=-maxVel;if(Math.abs(p.vx)<0.1)p.vx=0;
   if(p.onIce&&Math.abs(p.vx)>2&&iceSlideCd<=0){AM.sfx('slide');iceSlideCd=0.5;}
   if(iceSlideCd>0)iceSlideCd-=dt;
   // Coyote time: allow jumping briefly after leaving ground
@@ -633,9 +632,9 @@ function updatePlayer(){
   // Dodge
   if(canMove&&p.onGround){var dir=0;if(keys['ArrowLeft']||keys['KeyA'])dir=-1;if(keys['ArrowRight']||keys['KeyD'])dir=1;
     if(dir!==0&&dir===lastDirTap.dir&&(time-lastDirTap.time)<0.25&&p.state!=='dodge'){p.state='dodge';p.stateTimer=0.3;p.vx=dir*12;p.invulnTimer=0.3;lastDirTap.time=0;}}
-  // Physics (dt-normalized)
+  // Physics
   var prevY=p.y;
-  p.vy+=GRAVITY*dtN;p.x+=p.vx*dtN;p.y+=p.vy*dtN;
+  p.vy+=GRAVITY;p.x+=p.vx;p.y+=p.vy;
   if(p.y>=GROUND_Y){p.y=GROUND_Y;p.vy=0;p.onGround=true;if(p.state==='jump')p.state='idle';}
   // Platform collision (one-way: only land when falling and was above)
   if(p.vy>0&&p.y<GROUND_Y){
