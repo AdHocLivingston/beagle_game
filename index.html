@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Beagles' Bustin Ice</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #000; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
-    canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; cursor: pointer; }
+    canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; cursor: pointer; touch-action: none; }
   </style>
 </head>
 <body>
@@ -524,6 +524,20 @@ var laserTimer=0,laserHitX=0,laserHitY=0,laserStartX=0,laserStartY=0;
 var teslaChains=[];
 var controlsHintTimer=0; // shows controls at start
 
+// --- TOUCH CONTROLS ---
+var isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+var activeTouches = {};
+var touchBtns = [
+  {name:'left',   key:'ArrowLeft',   x:30,   y:570, w:90,  h:90,  label:'\u25C0'},
+  {name:'right',  key:'ArrowRight',  x:140,  y:570, w:90,  h:90,  label:'\u25B6'},
+  {name:'jump',   key:'Space',       x:1050, y:520, w:100, h:100, label:'J'},
+  {name:'punch',  key:'ShiftLeft',   x:1160, y:520, w:100, h:100, label:'P'},
+  {name:'weapon', key:'ControlLeft', x:1050, y:410, w:100, h:100, label:'W'}
+];
+function getTouchCC(touch){var r=canvas.getBoundingClientRect();return{x:(touch.clientX-r.left)*CW/r.width,y:(touch.clientY-r.top)*CH/r.height};}
+function hitTestBtn(cx,cy){for(var i=0;i<touchBtns.length;i++){var b=touchBtns[i];if(cx>=b.x&&cx<=b.x+b.w&&cy>=b.y&&cy<=b.y+b.h)return b;}return null;}
+function releaseKey(keyCode){for(var id in activeTouches){if(activeTouches[id]&&activeTouches[id].key===keyCode)return;}keys[keyCode]=false;}
+
 function resetGame(){
   var ch=CHARS[selChar];
   player={x:100,y:GROUND_Y,vx:0,vy:0,w:48,h:PLAYER_H,facing:1,
@@ -915,6 +929,75 @@ canvas.addEventListener('click',function(e){var m=getCC(e);
   if(state==='VICTORY')handleVC(m.x,m.y);
   if(state==='GAME_OVER'&&gameOverTimer<=0){resetGame();state='GAMEPLAY';AM.playM('gameplay');}
 });
+
+// --- TOUCH EVENT LISTENERS ---
+window.addEventListener('touchstart',function(){isTouchDevice=true;},{once:true,passive:true});
+
+canvas.addEventListener('touchstart',function(e){
+  e.preventDefault();
+  isTouchDevice=true;
+  for(var i=0;i<e.changedTouches.length;i++){
+    var t=e.changedTouches[i],cc=getTouchCC(t);
+    // Menu screens
+    if(state==='TITLE'){startAud();state='CHARACTER_SELECT';AM.sfx('menu');return;}
+    if(state==='CHARACTER_SELECT'){handleCS(cc.x,cc.y);return;}
+    if(state==='VICTORY'){handleVC(cc.x,cc.y);return;}
+    if(state==='GAME_OVER'&&gameOverTimer<=0){resetGame();state='GAMEPLAY';AM.playM('gameplay');return;}
+    // Gameplay buttons
+    if(state==='GAMEPLAY'||state==='BOSS_FIGHT'||state==='BOSS_INTRO'){
+      var btn=hitTestBtn(cc.x,cc.y);
+      if(btn){
+        activeTouches[t.identifier]={key:btn.key,name:btn.name};
+        var prev=keys[btn.key];
+        keys[btn.key]=true;
+        if(!prev&&(btn.key==='ArrowLeft'))lastDirTap={dir:-1,time:time};
+        if(!prev&&(btn.key==='ArrowRight'))lastDirTap={dir:1,time:time};
+      }
+    }
+  }
+},{passive:false});
+
+canvas.addEventListener('touchmove',function(e){
+  e.preventDefault();
+  for(var i=0;i<e.changedTouches.length;i++){
+    var t=e.changedTouches[i],cc=getTouchCC(t);
+    var prev=activeTouches[t.identifier];
+    var btn=hitTestBtn(cc.x,cc.y);
+    if(prev&&(!btn||btn.key!==prev.key)){
+      delete activeTouches[t.identifier];
+      releaseKey(prev.key);
+    }
+    if(btn&&(!prev||prev.key!==btn.key)){
+      activeTouches[t.identifier]={key:btn.key,name:btn.name};
+      keys[btn.key]=true;
+    }
+  }
+},{passive:false});
+
+canvas.addEventListener('touchend',function(e){
+  e.preventDefault();
+  for(var i=0;i<e.changedTouches.length;i++){
+    var t=e.changedTouches[i];
+    var prev=activeTouches[t.identifier];
+    if(prev){
+      delete activeTouches[t.identifier];
+      releaseKey(prev.key);
+    }
+  }
+},{passive:false});
+
+canvas.addEventListener('touchcancel',function(e){
+  e.preventDefault();
+  for(var i=0;i<e.changedTouches.length;i++){
+    var t=e.changedTouches[i];
+    var prev=activeTouches[t.identifier];
+    if(prev){
+      delete activeTouches[t.identifier];
+      releaseKey(prev.key);
+    }
+  }
+},{passive:false});
+
 function handleCS(mx,my){var bW=180,bH=240,gap=30,tW=CHARS.length*bW+(CHARS.length-1)*gap,sX=(CW-tW)/2,bY=140;
   for(var i=0;i<CHARS.length;i++){var bx=sX+i*(bW+gap);if(mx>=bx&&mx<=bx+bW&&my>=bY&&my<=bY+bH){if(selChar===i)startGP();else{selChar=i;AM.sfx('menu');}return;}}
   if(playBtnRect&&selChar>=0){var b=playBtnRect;if(mx>=b.x&&mx<=b.x+b.w&&my>=b.y&&my<=b.y+b.h)startGP();}}
@@ -1132,7 +1215,7 @@ function renderGP(){
     ctx.strokeStyle='#888';ctx.lineWidth=2;ctx.strokeRect(bX,sY,bW2,bH2);
     if(boss.immune){ctx.save();ctx.font=gf(8,false);ctx.textAlign='center';ctx.fillStyle='#88CCFF';ctx.fillText('IMMUNE — DEFEAT THE NINJAS!',CW/2,sY+bH2+14);ctx.restore();}}
   // Controls hint overlay
-  if(controlsHintTimer>0){
+  if(controlsHintTimer>0&&!isTouchDevice){
     var al2=controlsHintTimer>1?1:controlsHintTimer;
     ctx.save();ctx.globalAlpha=al2*0.85;
     ctx.fillStyle='#000';ctx.fillRect(CW-320,CH-220,310,210);
@@ -1143,6 +1226,32 @@ function renderGP(){
     for(var i=0;i<lines.length;i++)ctx.fillText(lines[i],CW-310,CH-175+i*22);
     ctx.font=gf(7,false);ctx.fillStyle='#888';ctx.fillText('(fades in a few seconds)',CW-310,CH-25);
     ctx.restore();}
+  // Touch buttons
+  renderTouchBtns();
+}
+
+function renderTouchBtns(){
+  if(!isTouchDevice)return;
+  if(state!=='GAMEPLAY'&&state!=='BOSS_FIGHT'&&state!=='BOSS_INTRO')return;
+  ctx.save();
+  for(var i=0;i<touchBtns.length;i++){
+    var b=touchBtns[i],pressed=!!keys[b.key];
+    var r=12;
+    ctx.globalAlpha=pressed?0.55:0.25;
+    ctx.fillStyle='#FFF';
+    ctx.beginPath();
+    ctx.moveTo(b.x+r,b.y);ctx.lineTo(b.x+b.w-r,b.y);ctx.quadraticCurveTo(b.x+b.w,b.y,b.x+b.w,b.y+r);
+    ctx.lineTo(b.x+b.w,b.y+b.h-r);ctx.quadraticCurveTo(b.x+b.w,b.y+b.h,b.x+b.w-r,b.y+b.h);
+    ctx.lineTo(b.x+r,b.y+b.h);ctx.quadraticCurveTo(b.x,b.y+b.h,b.x,b.y+b.h-r);
+    ctx.lineTo(b.x,b.y+r);ctx.quadraticCurveTo(b.x,b.y,b.x+r,b.y);
+    ctx.closePath();ctx.fill();
+    ctx.globalAlpha=pressed?0.9:0.5;
+    ctx.fillStyle='#000';
+    ctx.font=gf(b.label.length>1?18:22,true);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(b.label,b.x+b.w/2,b.y+b.h/2);
+  }
+  ctx.restore();
 }
 
 function renderHUD(){var p=player;if(!p)return;
